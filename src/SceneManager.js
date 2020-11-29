@@ -1,9 +1,7 @@
 import * as THREE from 'three';
-import {EffectComposer, EffectPass, RenderPass, ChromaticAberrationEffect} from 'postprocessing';
+import {EffectComposer, RenderPass} from 'postprocessing';
 import OrbitControls from 'three-orbitcontrols';
-
-import {Board} from './Board';
-import {Stone} from './Stone';
+import {OBJLoader} from 'three-obj-mtl-loader';
 
 class SceneManager {
   constructor({canvas}) {
@@ -24,7 +22,6 @@ class SceneManager {
 
     const passes = [
       new RenderPass(scene, camera),
-      // new EffectPass(camera, ...effects),
     ];
 
     passes[passes.length - 1].renderToScreen = true;
@@ -39,8 +36,6 @@ class SceneManager {
 
     const controls = new OrbitControls(camera, renderer.domElement);
     const coneAngle = Math.PI / 2;
-    // controls.minAzimuthAngle = -coneAngle;
-    // controls.maxAzimuthAngle = coneAngle;
 
     controls.minPolarAngle = Math.PI / 2 - coneAngle;
     controls.maxPolarAngle = Math.PI / 2 + coneAngle;
@@ -50,11 +45,6 @@ class SceneManager {
     controls.enablePan = false;
     this.controls = controls;
 
-    this.board = new Board({
-      rows: 19,
-      cols: 19,
-    });
-
     const ambientLight = new THREE.AmbientLight(0xFFFFFF, 0.4);
     scene.add(ambientLight);
 
@@ -63,48 +53,87 @@ class SceneManager {
     directionalLight.castShadow = true;
     directionalLight.shadowCameraVisible = true;
 
-    directionalLight.shadowCameraLeft = -250;
-    directionalLight.shadowCameraRight = 250;
-    directionalLight.shadowCameraTop = 250;
-    directionalLight.shadowCameraBottom = -250;
+    directionalLight.shadow.camera.left = -250;
+    directionalLight.shadow.camera.right = 250;
+    directionalLight.shadow.camera.top = 250;
+    directionalLight.shadow.camera.bottom = -250;
 
-    directionalLight.shadowCameraNear = 20;
-    directionalLight.shadowCameraFar = 200;
+    directionalLight.shadow.camera.near = 20;
+    directionalLight.shadow.camera.far = 200;
 
     scene.add(directionalLight);
-
-    // const lightHelper = new THREE.DirectionalLightHelper(directionalLight);
-    // scene.add(lightHelper);
-    //
-    //
-    // const cameraHelper = new THREE.CameraHelper(directionalLight.shadow.camera);
-    // scene.add(cameraHelper);
-    //
-    //
-    // scene.add(new THREE.AxisHelper(200));
 
     const light = new THREE.PointLight(0xffffff, 0.1);
     camera.add(light);
     scene.add(camera);
 
     // Zoom to fit
-    const {width: boardWidth, height: boardHeight} = this.board.getDimensions();
-    this.camera.position.z = (Math.max(boardWidth, boardHeight) / 2) / Math.tan(THREE.Math.degToRad(this.camera.fov / 2));
+    this.camera.position.z = 10; // (Math.max(boardWidth, boardHeight) / 2) / Math.tan(THREE.Math.degToRad(this.camera.fov / 2));
 
-    scene.add(this.board.getSceneObject());
+    this.go();
+  }
 
-    const blackStone = new Stone({material: new THREE.MeshPhongMaterial({
-      color: 0x333333,
-    })}).getSceneObject();
-    scene.add(blackStone);
+  async go() {
+    const wireframeMaterial = new THREE.MeshBasicMaterial({
+      wireframe: true,
+      color: 'red',
+    });
 
-    const whiteStone = new Stone({material: new THREE.MeshPhongMaterial({
-      color: 0xffffff,
-    })}).getSceneObject();
-    const {x, y} = this.board.grid.gridToSceneCoordinates({row: 8, col: 8});
-    whiteStone.position.x = x;
-    whiteStone.position.y = y;
-    scene.add(whiteStone);
+    // TODO on model uploaded...
+    const model = await this.load();
+
+    const modelBSPs = [];
+    const slicedBSPs = [];
+
+    model.children.forEach(child => {
+      const childGeometry = new THREE.Geometry().fromBufferGeometry(child.geometry);
+      const bsp = new window.ThreeBSP(childGeometry);
+      modelBSPs.push(bsp);
+    })
+
+    const combinedGeometry = this.createSlicers();
+
+    const slicerMesh = new THREE.Mesh(combinedGeometry, wireframeMaterial);
+    this.scene.add(slicerMesh);
+
+    const slicerBSP = new window.ThreeBSP(slicerMesh.geometry);
+    modelBSPs.forEach(modelBSP => {
+      const slicedBSP = modelBSP.intersect(slicerBSP);
+      slicedBSPs.push(slicedBSP);
+      this.scene.add(slicedBSP.toMesh());
+    });
+  }
+
+  async load() {
+    const loader = new OBJLoader();
+    const model = await new Promise(resolve => loader.load('/assets/monkey.obj', resolve));
+    return model;
+  }
+
+  createSlicers() {
+    const minT = -1; // TODO find model bounds
+    const maxT = 3;
+    const sliceThickness = 0.03;
+    const numSlices = 20;
+
+    const stackOrigin = new THREE.Vector3(0, 0, 0);
+    const stackDirection = new THREE.Vector3(0, 1, 0).normalize();
+
+    const slicerGeometries = [];
+
+    for (let i = 0; i < numSlices; i++) {
+      const t = (i / (numSlices - 1)) * (maxT - minT) + minT;
+      const displacement = new THREE.Vector3().copy(stackDirection).multiplyScalar(t);
+      const slicerCenter = new THREE.Vector3().copy(stackOrigin).add(displacement);
+      const geometry = new THREE.BoxBufferGeometry(10, sliceThickness, 10);
+      geometry.translate(slicerCenter.x, slicerCenter.y, slicerCenter.z);
+      slicerGeometries.push(new THREE.Geometry().fromBufferGeometry(geometry));
+    }
+
+    const combinedGeometry = new THREE.Geometry();
+    slicerGeometries.forEach(slicerGeometry => combinedGeometry.merge(slicerGeometry));
+
+    return combinedGeometry;
   }
 
   animate(params) {

@@ -1,10 +1,14 @@
 import React, {Component} from 'react';
 import * as THREE from 'three';
 
-import {Goban} from './Goban';
+import threeBSP from 'three-js-csg';
+
+import {Canvas} from './Canvas';
 import './App.css';
 
 window.THREE = THREE;
+const ThreeBSP = threeBSP(THREE);
+window.ThreeBSP = ThreeBSP;
 
 class App extends Component {
   constructor(props) {
@@ -17,7 +21,7 @@ class App extends Component {
   }
   render() {
     return (
-      <Goban
+      <Canvas
         width={this.state.width}
         height={this.state.height}
       />
@@ -28,7 +32,7 @@ class App extends Component {
   }
   componentDidMount(){
     this.updateDimensions();
-    window.addEventListener("resize", this.boundUpdateDimensions);
+    window.addEventListener("resize", () => this.boundUpdateDimensions);
   }
   componentWillUnmount() {
     window.removeEventListener("resize", this.boundUpdateDimensions);

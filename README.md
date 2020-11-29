@@ -1,6 +1,6 @@
-# goban.online
+# slyce
 
-A Go board on the Webk. Check it out at <a href="https://goban.online">goban.online</a>.
+Slice 3D models into layers for fabrication from sheet materials, for example with a laser cutter.
 
 ## Developing
 

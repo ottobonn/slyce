@@ -1,6 +1,6 @@
 {
-  "name": "goban",
-  "homepage": "https://goban.online",
+  "name": "slyce",
+  "homepage": "",
   "version": "0.0.1",
   "private": true,
   "dependencies": {
@@ -9,6 +9,8 @@
     "react-dom": "^16.6.0",
     "react-scripts": "2.1.1",
     "three": "^0.108.0",
+    "three-js-csg": "^72.0.0",
+    "three-obj-mtl-loader": "^1.0.3",
     "three-orbitcontrols": "^2.108.1",
     "three-trackballcontrols": "0.0.8",
     "three.meshline": "^1.2.0"
