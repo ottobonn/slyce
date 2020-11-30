@@ -80,27 +80,33 @@ class SceneManager {
     });
 
     // TODO on model uploaded...
-    const model = await this.load();
+    const rawModel = await this.load();
 
-    const modelBSPs = [];
+    const modelGeometry = new THREE.Geometry();
+    rawModel.children.forEach(child => {
+      modelGeometry.merge(new THREE.Geometry().fromBufferGeometry(child.geometry));
+    });
+
     const slicedBSPs = [];
 
-    model.children.forEach(child => {
-      const childGeometry = new THREE.Geometry().fromBufferGeometry(child.geometry);
-      const bsp = new window.ThreeBSP(childGeometry);
-      modelBSPs.push(bsp);
-    })
+    const slicerGeometries = this.createSlicers();
+    // const combinedGeometry = new THREE.Geometry();
+    // slicerGeometries.forEach(slicerGeometry => combinedGeometry.merge(slicerGeometry));
 
-    const combinedGeometry = this.createSlicers();
+    console.log(slicerGeometries)
 
-    const slicerMesh = new THREE.Mesh(combinedGeometry, wireframeMaterial);
-    this.scene.add(slicerMesh);
+    // const slicerMesh = new THREE.Mesh(combinedGeometry, wireframeMaterial);
+    // this.scene.add(slicerMesh);
 
-    const slicerBSP = new window.ThreeBSP(slicerMesh.geometry);
-    modelBSPs.forEach(modelBSP => {
+    // const slicerBSP = new window.ThreeBSP(slicerMesh.geometry);
+    const slicerBSPs = slicerGeometries.map(slicerGeometry => new window.ThreeBSP(slicerGeometry));
+    slicerBSPs.forEach(slicerBSP => {
+      const modelBSP = new window.ThreeBSP(modelGeometry);
       const slicedBSP = modelBSP.intersect(slicerBSP);
       slicedBSPs.push(slicedBSP);
-      this.scene.add(slicedBSP.toMesh());
+      const mesh = slicedBSP.toMesh(wireframeMaterial);
+      this.scene.add(mesh);
+      console.log(mesh)
     });
   }
 
@@ -113,8 +119,8 @@ class SceneManager {
   createSlicers() {
     const minT = -1; // TODO find model bounds
     const maxT = 3;
-    const sliceThickness = 0.03;
-    const numSlices = 20;
+    const sliceThickness = 0.01;
+    const numSlices = 5;
 
     const stackOrigin = new THREE.Vector3(0, 0, 0);
     const stackDirection = new THREE.Vector3(0, 1, 0).normalize();
@@ -125,15 +131,14 @@ class SceneManager {
       const t = (i / (numSlices - 1)) * (maxT - minT) + minT;
       const displacement = new THREE.Vector3().copy(stackDirection).multiplyScalar(t);
       const slicerCenter = new THREE.Vector3().copy(stackOrigin).add(displacement);
-      const geometry = new THREE.BoxBufferGeometry(10, sliceThickness, 10);
+      const geometry = new THREE.BoxGeometry(10, sliceThickness, 10);
+      // const geometry = new THREE.PlaneGeometry(10, 10, 1, 1);
+      // geometry.rotateX(90);
       geometry.translate(slicerCenter.x, slicerCenter.y, slicerCenter.z);
-      slicerGeometries.push(new THREE.Geometry().fromBufferGeometry(geometry));
+      slicerGeometries.push(geometry);
     }
 
-    const combinedGeometry = new THREE.Geometry();
-    slicerGeometries.forEach(slicerGeometry => combinedGeometry.merge(slicerGeometry));
-
-    return combinedGeometry;
+    return slicerGeometries;
   }
 
   animate(params) {
